@@ -79,8 +79,8 @@ class CubicBezier {
 	return ((d1 + d2) * (d1 + d2)) / (dx * dx + dy * dy);
   }
 	
-  #calculateOffset(d) {
-	const p = [ ...this.points ];
+  #calculateOffset(curve, d) {
+	const p = [ ...curve.points ];
 
 	const s0 = p[1].subtractPointFrom(p[0]);
 	const s3 = p[3].subtractPointFrom(p[2]);
@@ -234,7 +234,7 @@ class CubicBezier {
 		  : this.subdivide().curves.map((c) => c.subdivide().curves).flat();
 
 	subcurves.forEach((s) => { 
-	  const offset = s.#calculateOffset(d);
+	  const offset = this.#calculateOffset(s, d);
 	  if (offset) offsets.push(offset);
 	});
 	  
