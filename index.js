@@ -1,44 +1,77 @@
-import { SvgPath } from './svg.js';
-import { BSpline } from './spline.js';
 import { Point } from './point.js';
-import { CompositeCubicBezier, CubicBezier } from './bezier.js';
+import { CubicBezier, CompositeCubicBezier } from './bezier.js';
+import { SvgPath } from './svg.js';
+import { invertMatrix, multiplyMatrices } from './utils.js';
 
-let path = 'M 0 -1 C 1 1 3 1 8 -3';
-let svgPath = new SvgPath(path);
-let curve = svgPath.toCubicBeziers();
-let q = curve.toQuadraticBezier();
-console.log(q.toCubicBezier());
-let offsetComp = curve.offset(-1);
-console.log(offsetComp.toSvg());
+// const path = new SvgPath('M 0 0 C 1 1 3 1 4 0');
+// const curve = new CubicBezier(new Point(0, 0), new Point(1, 1), new Point(3, 1), new Point(4, 0));
 
-// let offsets = curves.map((c) => c.offset(1)).flat();
-// console.log(curves.map((c) => c.offset(1)))
-// console.log(offsets.map((c) => c.toSvg()).join(' '));
+// const p = path.normalizedCurves;
 
-let p1 = new Point(1, 2);
-let p2 = new Point(2, 3);
-let p3 = new Point(3, 4);
-let p4 = new Point(4, 5);
-let p5 = new Point(5, 6);
-let p6 = new Point(6, 7);
-let p7 = new Point(7, 8);
-let p8 = new Point(8, 9);
-let c1 = new CubicBezier(p1, p2, p3, p4);
-let c2 = new CubicBezier(p5, p6, p7, p8);
+function offsetCubicBezier(curve, offset) {
+  const p = curve.points;
+  
+  const s0 = p[1].subtractPointFrom(p[0]);
+  const s3 = p[3].subtractPointFrom(p[2]);
+  
+  const a = Point.sumPoints(s0.multiplyBy(3), s3.multiplyBy(3), p[3].subtractPointFrom(p[0]).multiplyBy(-2));
+  const b = Point.sumPoints(s0.multiplyBy(-6), s3.multiplyBy(-3), p[3].subtractPointFrom(p[0]).multiplyBy(3));
+  const c = s0.multiplyBy(3);
+  
+  const n0 = new Point(-s0.y, s0.x).divideBy(Math.sqrt(s0.x * s0.x + s0.y * s0.y));
+  const n3 = new Point(-s3.y, s3.x).divideBy(Math.sqrt(s3.x * s3.x + s3.y * s3.y));
+  
+  const q0 = p[0].addPointTo(n0.multiplyBy(offset));
+  const q3 = p[3].addPointTo(n3.multiplyBy(offset));
+  
+  const A = Point.sumPoints(s0.multiplyBy(3), s3.multiplyBy(3), q3.subtractPointFrom(q0).multiplyBy(-2));
+  const B = Point.sumPoints(s0.multiplyBy(-6), s3.multiplyBy(-3), q3.subtractPointFrom(q0).multiplyBy(3));
+  const C = s0.multiplyBy(3);
+  
+  const Pc = Point.sumPoints(a.divideBy(8), b.divideBy(4), c.divideBy(2), p[0]);
+  const Qc = Point.sumPoints(A.divideBy(8), B.divideBy(4), C.divideBy(2), q0);
+  
+  const dp = Point.sumPoints(a.multiplyBy(3 / 4), b, c);
+  const dq = Point.sumPoints(A.multiplyBy(3 / 4), B, C);
+  
+  const nc = new Point(-dp.y, dp.x).divideBy(Math.sqrt(dp.x * dp.x + dp.y * dp.y));
+  
+  const Rc = Pc.addPointTo(nc.multiplyBy(offset));
+  
+  const Ma = [
+    [ s0.x, -s3.x, (8 / 3) * dp.x ],
+    [ s0.y, -s3.y, (8 / 3) * dp.y ],
+    [ -s0.x * dp.y + s0.y * dp.x, -s3.x * dp.y + s3.y * dp.x, 4 * ((s0.y - s3.y) * dp.x - (s0.x - s3.x) * dp.y) ]
+  ];
+  
+  const Mb = [
+    [ (8 / 3) * (Rc.x - Qc.x) ],
+    [ (8 / 3) * (Rc.y - Qc.y) ],
+    [ (4 / 3) * (dq.y * dp.x - dq.x * dp.y) ]
+  ];
+  
+  const [[ dk0 ], [ dk3 ], [ dt ]] = multiplyMatrices(invertMatrix(Ma), Mb);
+  return new CubicBezier(q0, q0.addPointTo(s0.multiplyBy(1 + dk0)), q3.subtractPointFrom(s3.multiplyBy(1 + dk3)), q3);
+}
 
-// const bSpline = new BSpline(new Point(0, 0), new Point(3, 3), new Point(6, 3), new Point(12, 0), new Point(15, 3), new Point(9, 6));
+const test = new CubicBezier(new Point(0.1, 0.1), new Point(0.1, 0.9), new Point(0.5, 0.9), new Point(0.9, 0.8));
+// const test = new CubicBezier(new Point(0, 0), new Point(1, 1), new Point(3, 1), new Point(4, 0));
 
-// console.log(BSpline.interpolateFromPoints(new Point(1, -1), new Point(-1, 2), new Point(1, 4), new Point(4, 3), new Point(7, 5)).toSvg());
+// console.log(offsetCubicBezier(test, 0.25).toSvg());
+// console.log(test.offset(-0.25).toSvg())
+// console.log(test)
+// console.log(new CubicBezier(new Point(0, 0), new Point(0, 2), new Point(4, 2), new Point(4, 0)).offset(-0.25).toSvg())
+const testSmoothCurveTo = new SvgPath('M 0 0 C 0 2 4 2 4 0 S 8 -2 8 0');
+const testQuadraticCurveTo = new SvgPath('M 0 0 Q 2 0 3 -2 Q 5 -6 7 -6');
+const testSmoothQuadraticCurveTo = new SvgPath('M 0 0 Q 2 0 3 -2 T 6 -4');
+const testLineToClosed = new SvgPath('M 0 0 L 1 1 L 0 2 L -1 1 Z');
+const testHorizontalVerticalLineToClosed = new SvgPath('M 0 0 H 1 V 1 H 0 Z');
+// const abc = new SvgPath('M2.84659 12.1534 C2.43182 12.1534 2.0554 12.0753 1.71733 11.919 C1.37926 11.7599 1.1108 11.5312 0.911932 11.233 C0.713068 10.9318 0.613636 10.5682 0.613636 10.142 C0.613636 9.76705 0.6875 9.46307 0.835227 9.23011 C0.982955 8.99432 1.1804 8.80966 1.42756 8.67614 C1.67472 8.54261 1.94744 8.44318 2.24574 8.37784 C2.54688 8.30966 2.84943 8.25568 3.15341 8.21591 C3.55114 8.16477 3.87358 8.12642 4.12074 8.10085 C4.37074 8.07244 4.55256 8.02557 4.66619 7.96023 C4.78267 7.89489 4.84091 7.78125 4.84091 7.61932 L4.84091 7.58523 C4.84091 7.16477 4.72585 6.83807 4.49574 6.60511 C4.26847 6.37216 3.9233 6.25568 3.46023 6.25568 C2.98011 6.25568 2.60369 6.3608 2.33097 6.57102 C2.05824 6.78125 1.86648 7.00568 1.75568 7.24432 L0.801136 6.90341 C0.971591 6.50568 1.19886 6.19602 1.48295 5.97443 C1.76989 5.75 2.08239 5.59375 2.42045 5.50568 C2.76136 5.41477 3.09659 5.36932 3.42614 5.36932 C3.63636 5.36932 3.87784 5.39489 4.15057 5.44602 C4.42614 5.49432 4.69176 5.59517 4.94744 5.74858 C5.20597 5.90199 5.42045 6.13352 5.59091 6.44318 C5.76136 6.75284 5.84659 7.16761 5.84659 7.6875 L5.84659 12 L4.84091 12 L4.84091 11.1136 L4.78977 11.1136 C4.72159 11.2557 4.60795 11.4077 4.44886 11.5696 C4.28977 11.7315 4.07812 11.8693 3.81392 11.983 C3.54972 12.0966 3.22727 12.1534 2.84659 12.1534 Z M3 11.25 C3.39773 11.25 3.73295 11.1719 4.00568 11.0156 C4.28125 10.8594 4.48864 10.6577 4.62784 10.4105 C4.76989 10.1634 4.84091 9.90341 4.84091 9.63068 L4.84091 8.71023 C4.7983 8.76136 4.70455 8.80824 4.55966 8.85085 C4.41761 8.89062 4.25284 8.92614 4.06534 8.95739 C3.88068 8.9858 3.70028 9.01136 3.52415 9.03409 C3.35085 9.05398 3.21023 9.07102 3.10227 9.08523 C2.84091 9.11932 2.59659 9.17472 2.36932 9.25142 C2.14489 9.32528 1.96307 9.4375 1.82386 9.58807 C1.6875 9.7358 1.61932 9.9375 1.61932 10.1932 C1.61932 10.5426 1.74858 10.8068 2.0071 10.9858 C2.26847 11.1619 2.59943 11.25 3 11.25 Z M7.81854 12 L7.81854 3.27273 L8.82422 3.27273 L8.82422 6.49432 L8.90945 6.49432 C8.98331 6.38068 9.08558 6.2358 9.21626 6.05966 C9.34979 5.88068 9.54013 5.72159 9.78729 5.58239 C10.0373 5.44034 10.3754 5.36932 10.8015 5.36932 C11.3526 5.36932 11.8384 5.5071 12.2589 5.78267 C12.6793 6.05824 13.0075 6.44886 13.2433 6.95455 C13.479 7.46023 13.5969 8.05682 13.5969 8.74432 C13.5969 9.4375 13.479 10.0384 13.2433 10.5469 C13.0075 11.0526 12.6808 11.4446 12.2631 11.723 C11.8455 11.9986 11.364 12.1364 10.8185 12.1364 C10.3981 12.1364 10.0614 12.0668 9.80859 11.9276 C9.55575 11.7855 9.36115 11.625 9.22479 11.446 C9.08842 11.2642 8.98331 11.1136 8.90945 10.9943 L8.79013 10.9943 L8.79013 12 L7.81854 12 Z M8.80717 8.72727 C8.80717 9.22159 8.87962 9.65767 9.0245 10.0355 C9.16939 10.4105 9.38104 10.7045 9.65945 10.9176 C9.93785 11.1278 10.2788 11.233 10.6822 11.233 C11.1026 11.233 11.4535 11.1222 11.7347 10.9006 C12.0188 10.6761 12.2319 10.375 12.3739 9.99716 C12.5188 9.61648 12.5913 9.19318 12.5913 8.72727 C12.5913 8.26705 12.5202 7.85227 12.3782 7.48295 C12.239 7.1108 12.0273 6.81676 11.7433 6.60085 C11.462 6.3821 11.1083 6.27273 10.6822 6.27273 C10.2731 6.27273 9.92933 6.37642 9.65092 6.58381 C9.37251 6.78835 9.16229 7.07528 9.02024 7.4446 C8.8782 7.81108 8.80717 8.23864 8.80717 8.72727 Z M17.7944 12.1364 C17.1808 12.1364 16.6523 11.9915 16.2092 11.7017 C15.766 11.4119 15.4251 11.0128 15.1864 10.5043 C14.9478 9.99574 14.8285 9.41477 14.8285 8.76136 C14.8285 8.09659 14.9506 7.50994 15.195 7.00142 C15.4421 6.49006 15.7859 6.09091 16.2262 5.80398 C16.6694 5.5142 17.1864 5.36932 17.7773 5.36932 C18.2376 5.36932 18.6523 5.45455 19.0217 5.625 C19.391 5.79545 19.6935 6.03409 19.9293 6.34091 C20.1651 6.64773 20.3114 7.00568 20.3683 7.41477 L19.3626 7.41477 C19.2859 7.11648 19.1154 6.85227 18.8512 6.62216 C18.5898 6.3892 18.2376 6.27273 17.7944 6.27273 C17.4023 6.27273 17.0586 6.375 16.7631 6.57955 C16.4705 6.78125 16.2418 7.06676 16.0771 7.43608 C15.9151 7.80256 15.8342 8.23295 15.8342 8.72727 C15.8342 9.23295 15.9137 9.6733 16.0728 10.0483 C16.2347 10.4233 16.462 10.7145 16.7546 10.9219 C17.0501 11.1293 17.3967 11.233 17.7944 11.233 C18.0558 11.233 18.293 11.1875 18.506 11.0966 C18.7191 11.0057 18.8995 10.875 19.0472 10.7045 C19.195 10.5341 19.3001 10.3295 19.3626 10.0909 L20.3683 10.0909 C20.3114 10.4773 20.1708 10.8253 19.9464 11.1349 C19.7248 11.4418 19.4308 11.6861 19.0643 11.8679 C18.7006 12.0469 18.2773 12.1364 17.7944 12.1364 Z');
+// console.log(test.normalizedCurves.curves.map((c) => c.points))
+// console.log(testSmoothCurveTo.normalizedCurves.toSvg());
+// console.log(new CompositeCubicBezier(...abc.normalizedCurves.curves).offset(-0.25).toSvg());
+const a = new SvgPath('M2.23295 6.78409 C1.81818 6.78409 1.44176 6.70597 1.10369 6.54972 C0.765625 6.39062 0.497159 6.16193 0.298295 5.86364 C0.0994319 5.5625 0 5.19886 0 4.77273 C0 4.39773 0.0738636 4.09375 0.221591 3.8608 C0.369318 3.625 0.566761 3.44034 0.81392 3.30682 C1.06108 3.1733 1.33381 3.07386 1.6321 3.00852 C1.93324 2.94034 2.2358 2.88636 2.53977 2.84659 C2.9375 2.79545 3.25994 2.7571 3.5071 2.73153 C3.7571 2.70312 3.93892 2.65625 4.05256 2.59091 C4.16903 2.52557 4.22727 2.41193 4.22727 2.25 L4.22727 2.21591 C4.22727 1.79545 4.11222 1.46875 3.8821 1.2358 C3.65483 1.00284 3.30966 0.886364 2.84659 0.886364 C2.36648 0.886364 1.99006 0.991477 1.71733 1.2017 C1.4446 1.41193 1.25284 1.63636 1.14205 1.875 L0.1875 1.53409 C0.357955 1.13636 0.585227 0.826705 0.869318 0.605114 C1.15625 0.380682 1.46875 0.224432 1.80682 0.136364 C2.14773 0.045455 2.48295 0 2.8125 0 C3.02273 0 3.2642 0.025568 3.53693 0.076704 C3.8125 0.125 4.07812 0.225852 4.33381 0.379261 C4.59233 0.53267 4.80682 0.764205 4.97727 1.07386 C5.14773 1.38352 5.23295 1.7983 5.23295 2.31818 L5.23295 6.63068 L4.22727 6.63068 L4.22727 5.74432 L4.17614 5.74432 C4.10795 5.88636 3.99432 6.03835 3.83523 6.20028 C3.67614 6.36222 3.46449 6.5 3.20028 6.61364 C2.93608 6.72727 2.61364 6.78409 2.23295 6.78409 Z M2.38636 5.88068 C2.78409 5.88068 3.11932 5.80256 3.39205 5.64631 C3.66761 5.49006 3.875 5.28835 4.0142 5.04119 C4.15625 4.79403 4.22727 4.53409 4.22727 4.26136 L4.22727 3.34091 C4.18466 3.39205 4.09091 3.43892 3.94602 3.48153 C3.80398 3.52131 3.6392 3.55682 3.4517 3.58807 C3.26705 3.61648 3.08665 3.64205 2.91051 3.66477 C2.73722 3.68466 2.59659 3.7017 2.48864 3.71591 C2.22727 3.75 1.98295 3.8054 1.75568 3.8821 C1.53125 3.95597 1.34943 4.06818 1.21023 4.21875 C1.07386 4.36648 1.00568 4.56818 1.00568 4.82386 C1.00568 5.1733 1.13494 5.4375 1.39347 5.61648 C1.65483 5.79261 1.9858 5.88068 2.38636 5.88068 Z');
+// console.log(new CompositeCubicBezier(...a.normalizedCurves.curves).offset(0.25).toSvg())
 
-let ccb1 = new CompositeCubicBezier(c1, c2)
-let ccb2 = new CompositeCubicBezier([ c1, c2 ])
-let ccb4 = new CompositeCubicBezier(p1, p2, p3, p4, p5, p6, p7, p8)
-let ccb5 = new CompositeCubicBezier([ p1, p2, p3, p4, p5, p6, p7, p8 ])
-
-// console.log('multiple (2) CubicBezier: ', ccb1)
-// console.log('array of CubicBezier: ', ccb2)
-// console.log('multiple (8) Point: ', ccb4)
-// console.log('array of Point: ', ccb5)
-
-// console.log(bSpline);
-// console.log(bSpline.toSvg());
+const t = new SvgPath('M 0.1 0.1 C 0.1 0.9 0.5 0.9 0.9 0.8');
+console.log(t.normalizedCurves.offset(-0.025).toSvg())

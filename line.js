@@ -6,7 +6,7 @@ class Line {
 	this.q = q || new Point(0, 1);
 	this.slope = (this.q.y - this.p.y) / (this.q.x - this.p.x);
 	this.intercept = this.p.y - this.slope * this.p.x;
-	const x = this.q.x - this.p.x, y = this.q.y - this.p.y, d = Math.sqrt( x + y * y);
+	const x = this.q.x - this.p.x, y = this.q.y - this.p.y, d = Math.sqrt(x * x + y * y);
 	this.normal = { dx: -y / d, dy: x / d, slope: -y / x };
 	this.length = d;
   }
@@ -19,8 +19,20 @@ class Line {
 
 	const d = (b.q.y - b.p.y) * (a.q.x - a.p.x) - (b.q.x - b.p.x) * (a.q.y - a.p.y);
 	
-	if (d === 0) return null; // a and b are the same point
-	
+	if (d === 0) return null; // a and b are parallel or the same line
+
+	if (!Number.isFinite(a.slope)) {
+	  const p = new Point(a.p.x, b.slope * a.p.x + b.p.y - b.slope * b.p.x);
+	  if (restrictToSegments && ((p.y > Math.max(a.p.y, a.q.y) && p.y > Math.max(b.p.y, b.q.y)) || ((p.y < Math.min(a.p.y, a.q.y) && p.y < Math.min(b.p.y, b.q.y))))) return null;
+	  return p;
+	}
+	  
+	if (!Number.isFinite(b.slope)) {
+	  const p = new Point(b.p.x, a.slope * b.p.x + a.p.y - a.slope * a.p.x);
+	  if (restrictToSegments && ((p.y > Math.max(a.p.y, a.q.y) && p.y > Math.max(b.p.y, b.q.y)) || ((p.y < Math.min(a.p.y, a.q.y) && p.y < Math.min(b.p.y, b.q.y))))) return null;
+	  return p;
+	}
+	  
 	const ua = ((b.q.x - b.p.x) * (a.p.y - b.p.y) - (b.q.y - b.p.y) * (a.p.x - b.p.x)) / d;
 
 	if (restrictToSegments) {

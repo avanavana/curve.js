@@ -19,12 +19,6 @@ function collectArgs(f, ...input) {
   return f(args);
 }
 
-function array1DTo2D(a) {
-  let b = [];
-  while (a.length) b.push(test.splice(0, 4));
-  return b;
-}
-
 function cleanDecimal(d, precision = 9) {
   return Math.round(d * Math.pow(10, precision)) / Math.pow(10, precision);
 }
@@ -81,7 +75,7 @@ function invertMatrix(A, { cleanDecimals } = { cleanDecimals: true }) {
     [ I[i], I[max] ] = [ I[max], I[i] ];
 
     const det = A[i][i];
-    if (det === 0) throw 'Matrix is singular and cannot be inverted.';
+    if (det === 0) return null; // throw 'Matrix is singular and cannot be inverted.';
 
     for (let j = 0; j < n; j++) {
       A[i][j] /= det;
@@ -111,6 +105,5 @@ export {
   createSplineCoefficientMatrix,
   multiplyMatrices,
   invertMatrix,
-  cleanDecimal,
-  array1DTo2D
+  cleanDecimal
  };

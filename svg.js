@@ -37,14 +37,14 @@ const SvgCommandKeys = Object.freeze({
 const toCubicBezierConversions = new Map([
   // [ SvgCommands.ELLIPTICAL_ARC_TO, (v) => v],
   [ SvgCommands.CURVE_TO, (v) => v ],
-  [ SvgCommands.HORIZONTAL_LINE_TO, (v, pf) => [ ...pf, ...v, pf[0], ...v, pf[0] ]],
-  [ SvgCommands.LINE_TO, (v, pf) => [ ...pf, ...v, ...v ]],
+  [ SvgCommands.HORIZONTAL_LINE_TO, (v, pf) => [ (2 * pf[0] + v[0]) / 3, pf[1], (pf[0] + 2 * v[0]) / 3, pf[1], v[0], pf[1] ]],
+  [ SvgCommands.LINE_TO, (v, pf) => [ (2 * pf[0] + v[0]) / 3, (2 * pf[1] + v[1]) / 3, (pf[0] + 2 * v[0]) / 3, (pf[1] + 2 * v[1]) / 3, ...v ]],
   [ SvgCommands.MOVE_TO, (v) => v ],
-  [ SvgCommands.QUADRATIC_CURVE_TO, (v, pf) => [ pf[0] + 2 / 3 * (v[0] - pf[0]), pf[1] + 2 / 3 * (v[1] - pf[1]), v[2] + 2 / 3 * (v[0] - v[2]), v[3] + 2 / 3 * (v[1] - v[3]), ...v.slice(2) ]],
-  [ SvgCommands.SMOOTH_CURVE_TO, (v, pf) => [ ...pf, ...v ]],
-  [ SvgCommands.SMOOTH_QUADRATIC_CURVE_TO, (v, pf, pp) => [ pf[0] + 2 / 3 * ((2 * pf[0] - pp[0]) - pf[0]), pf[1] + 2 / 3 * ((2 * pf[1] - pp[1]) - pf[1]), v[0] + 2 / 3 * ((2 * pf[0] - pp[0]) - v[0]), v[1] + 2 / 3 * ((2 * pf[1] - pp[1]) - v[1]), ...v ]],
-  [ SvgCommands.VERTICAL_LINE_TO, (v, pf) => [ ...pf, pf[1], ...v, pf[1], ...v ]],
-  [ SvgCommands.CLOSE_PATH, (_, pf, __, f) => [ ...pf, ...f, ...f ]]
+  [ SvgCommands.QUADRATIC_CURVE_TO, (v, pf) => [ pf[0] + (2 / 3) * (v[0] - pf[0]), pf[1] + (2 / 3) * (v[1] - pf[1]), v[2] + (2 / 3) * (v[0] - v[2]), v[3] + (2 / 3) * (v[1] - v[3]), ...v.slice(2) ]],
+  [ SvgCommands.SMOOTH_CURVE_TO, (v, pf, pp) => [ 2 * pf[0] - pp[0], 2 * pf[1] - pp[1], ...v ]],
+  [ SvgCommands.SMOOTH_QUADRATIC_CURVE_TO, (v, pf, pp) => [ pf[0] + (2 / 3) * ((2 * pf[0] - pp[0]) - pf[0]), pf[1] + (2 / 3) * ((2 * pf[1] - pp[1]) - pf[1]), v[0] + (2 / 3) * ((2 * pf[0] - pp[0]) - v[0]), v[1] + (2 / 3) * ((2 * pf[1] - pp[1]) - v[1]), ...v ]],
+  [ SvgCommands.VERTICAL_LINE_TO, (v, pf) => [ pf[0], (2 * pf[1] + v[1]) / 3, pf[0], (pf[1] + 2 * v[1]) / 3, pf[0], v[0] ]],
+  [ SvgCommands.CLOSE_PATH, (_, pf, __, f)   => [ (2 * pf[0] + f[0]) / 3, (2 * pf[1] + f[1]) / 3, (pf[0] + 2 * f[0]) / 3, (pf[1] + 2 * f[1]) / 3, ...f ]]
 ]);
 
 const svgCommandLengths = new Map([
@@ -64,90 +64,112 @@ const svgTestString = `^(?:[${Object.keys(SvgCommandKeys).join('')}](?:\\s*-?\\d
 
 class SvgPath {
   constructor(path) {
-	if (!isValidSvgPathArgs(path)) throw new Error('Invalid SVG path. Path must not use the "ELLIPTICAL_ARC_TO (A)" command, nor relative values.');
-	this.path = path;
-	this.normalizedPath = this.#normalize(SvgPathFormats.PATH_STRING);
-	this.normalizedCurves = this.#normalize(SvgPathFormats.CUBIC_BEZIER_CURVES);
-	this.normalizedCommands = this.#normalize();
+  	if (!isValidSvgPathArgs(path)) throw new Error('Invalid SVG path. Path must not use the "ELLIPTICAL_ARC_TO (A)" command, nor relative values.');
+  	this.path = path;
+  	this.normalizedPath = this.#normalize(SvgPathFormats.PATH_STRING);
+  	this.normalizedCurves = this.#normalize(SvgPathFormats.CUBIC_BEZIER_CURVES);
+  	this.normalizedCommands = this.#normalize();
   }
 
   static splineToSvg(input, { closePath } = { closePath: false }) {
-	const curves = Array.isArray(input[0]) ? [ ...input] : [[ ...input ]];
-
-	return curves.map((curve, i) => {
-		const m = curve.splice(0, 1);
-
-	  return i === 0
-		? `M ${m[0].x} ${m[0].y} C ${curve.map(({ x, y }) => x + ' ' + y).join(' ')}`
-		: `C ${curve.slice(1, curve.length).map(({ x, y }) => x + ' ' + y).join(' ')}`;
-	}).join(' ') + (closePath ? ' Z' : '');
+  	const curves = Array.isArray(input[0]) ? [ ...input] : [[ ...input ]];
+  
+  	return curves.map((curve, i) => {
+  		const m = curve.splice(0, 1);
+  
+  	  return i === 0
+    		? `M ${m[0].x} ${m[0].y} C ${curve.map(({ x, y }) => x + ' ' + y).join(' ')}`
+    		: `C ${curve.slice(1, curve.length).map(({ x, y }) => x + ' ' + y).join(' ')}`;
+    	}).join(' ') + (closePath ? ' Z' : '');
   }
 
   #extractCommands() {
-	const commands = [], terms = this.path.replace(/\s\s/g, ' ').replace(new RegExp(`([${Object.keys(SvgCommandKeys).join('')}])([0-9])`, 'g'), '$1 $2').split(' ');
-
-	while (terms.length) {
-	  const term = terms.splice(0, 1)[0];
-	  const values = terms.splice(0, svgCommandLengths.get(SvgCommandKeys[term])).map(parseFloat);
-	  if (!values.every((v) => !Number.isNaN(v))) throw new Error('Invalid SVG path.');
-	  commands.push({ command: SvgCommandKeys[term], values });
-	}
-
-	return commands;
+  	const commands = [], terms = this.path.replace(/\s\s/g, ' ').replace(new RegExp(`([${Object.keys(SvgCommandKeys).join('')}])([0-9])`, 'g'), '$1 $2').split(' ');
+  
+  	while (terms.length) {
+  	  const term = terms.splice(0, 1)[0];
+  	  const values = terms.splice(0, svgCommandLengths.get(SvgCommandKeys[term])).map(parseFloat);
+  	  if (!values.every((v) => !Number.isNaN(v))) throw new Error('Invalid SVG path.');
+  	  commands.push({ command: SvgCommandKeys[term], values });
+  	}
+  
+  	return commands;
   }
-
+                                                                                                    
   #normalize(format = SvgPathFormats.COMMAND_LIST) {
-	let finalPoint, penultimatePoint, normalizedCommands = [], commands = this.#extractCommands(this.path), firstPoint = commands[0].values;
+	  let finalPoint,
+        penultimatePoint,
+        normalizedCommands = [],
+        commands = this.#extractCommands(this.path),
+        firstPoint = commands[0].values;
 
-	commands.forEach(({ command, values }, i) => {
-	  if (i > 0) {
-		const previousFinalPoint = finalPoint;
-		const previousPenultimatePoint = command === SvgCommands.QUADRATIC_CURVE_TO || command === SvgCommands.SMOOTH_QUADRATIC_CURVE_TO ? penultimatePoint : null;
-		finalPoint = values.slice(-2);
+	  commands.forEach(({ command, values }, i) => {
+	    if (i > 0) {
+		    let previousPenultimatePoint, previousFinalPoint = finalPoint;
+      
+        if (
+          command === SvgCommands.QUADRATIC_CURVE_TO ||
+          command === SvgCommands.SMOOTH_QUADRATIC_CURVE_TO ||
+          command === SvgCommands.CURVE_TO ||
+          command === SvgCommands.SMOOTH_CURVE_TO
+        ) {
+          previousPenultimatePoint = penultimatePoint;
+        } else {
+          previousPenultimatePoint = null;
+        }
+        
+        if (
+          command === SvgCommands.QUADRATIC_CURVE_TO ||
+          command === SvgCommands.CURVE_TO
+        ) {
+          penultimatePoint = values.slice(values.length - 4, values.length - 2);
+        } else if (
+          command === SvgCommands.SMOOTH_QUADRATIC_CURVE_TO ||
+          command === SvgCommands.SMOOTH_CURVE_TO
+        ) {
+          penultimatePoint = [ 2 * previousFinalPoint[0] - previousPenultimatePoint[0], 2 * previousFinalPoint[1] - previousPenultimatePoint[1] ];
+        } else {
+          penultimatePoint = null;
+        }
+        
+  		  values = toCubicBezierConversions.get(command)(values, previousFinalPoint, previousPenultimatePoint, firstPoint);
+        finalPoint = values.slice(-2);
+  		  command = SvgCommands.CURVE_TO;
+  	  } else {
+  		  finalPoint = values.slice(-2);
+  	  }
 
-		penultimatePoint = command === SvgCommands.QUADRATIC_CURVE_TO
-		  ? values.slice(values.length - 4, values.length - 2)
-		  : command === SvgCommands.SMOOTH_QUADRATIC_CURVE_TO
-			? [ 2 * previousFinalPoint[0] - previousPenultimatePoint[0], 2 * previousFinalPoint[1] - previousPenultimatePoint[1] ]
-			: null;
+	    normalizedCommands.push({ command, values });
+	  });
 
-		values = toCubicBezierConversions.get(command)(values, previousFinalPoint, previousPenultimatePoint, firstPoint);
-		command = SvgCommands.CURVE_TO;
-	  } else {
-		finalPoint = values.slice(-2);
+	  switch (format) {
+	    case SvgPathFormats.PATH_STRING:
+		    return normalizedCommands.map(({ command, values }) => `${command.description} ${values.join(' ')}`).join(' ').trim();
+	    case SvgPathFormats.CUBIC_BEZIER_CURVES:
+		    let m = normalizedCommands.splice(0, 1)[0], previousFinal = new Point(m.values[0], m.values[1]), curves = [];
+
+    		for (let { values } of normalizedCommands) {
+    		  curves.push(new CubicBezier(previousFinal, new Point(values[0], values[1]), new Point(values[2], values[3]), new Point(values[4], values[5])));
+    		  previousFinal = new Point(values[4], values[5]);
+    		}
+    			
+    		return curves.length > 1 ? new CompositeCubicBezier(...curves) : curves[0];
+	    case SvgPathFormats.COMMAND_LIST:
+	    default:
+		    return normalizedCommands;
 	  }
-
-	  normalizedCommands.push({ command, values });
-	});
-
-	switch (format) {
-	  case SvgPathFormats.PATH_STRING:
-		return normalizedCommands.map(({ command, values }) => `${command.description} ${values.join(' ')}`).join(' ').trim();
-	  case SvgPathFormats.CUBIC_BEZIER_CURVES:
-		let m = commands.splice(0, 1)[0], previousFinal = new Point(m.values[0], m.values[1]), curves = [];
-
-		for (let { values } of commands) {
-		  curves.push(new CubicBezier(previousFinal, new Point(values[0], values[1]), new Point(values[2], values[3]), new Point(values[4], values[5])));
-		  previousFinal = new Point(values[4], values[5]);
-		}
-			
-		return curves.length > 1 ? new CompositeCubicBezier(...curves) : curves[0];
-	  case SvgPathFormats.COMMAND_LIST:
-	  default:
-		return normalizedCommands;
-	}
   }
 
   toCubicBezierSvgPath() {
-	return this.normalizedPath;
+	  return this.normalizedPath;
   }
 
   toCubicBeziers() {
-	return this.normalizedCurves;
+	  return this.normalizedCurves;
   }
 
   toCubicBezierSvgCommands() {
-	return this.normalizedCommands;
+	  return this.normalizedCommands;
   }
 }
 

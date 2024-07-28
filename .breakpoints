@@ -1,3 +1,18 @@
 {
-  "files": {}
+  "files": {
+    "svg.js": [
+      {
+        "id": "323fcc9d-06b5-4854-96c6-90145599ee55",
+        "line": 133,
+        "version": 3714,
+        "index": 5721
+      },
+      {
+        "id": "4dd6502d-36ff-45d1-bdfa-59f9531d3372",
+        "line": 134,
+        "version": 3714,
+        "index": 5730
+      }
+    ]
+  }
 }
